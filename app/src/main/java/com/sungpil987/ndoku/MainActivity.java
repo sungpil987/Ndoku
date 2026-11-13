@@ -28,7 +28,9 @@ public class MainActivity extends Activity {
         private final int[] regionColors={Color.rgb(248,194,211),Color.rgb(115,191,222),Color.rgb(187,218,155),Color.rgb(242,202,91)};
         private int[][] regions={{0,0,1,1},{0,0,1,1},{2,2,3,3},{2,2,3,3}};
         private int[][] cells=new int[4][4]; // 0 empty, 1 cat, 2 excluded
-        private int[][] solution={{0,1,0,0},{0,0,0,1},{1,0,0,0},{0,0,1,0}};
+        private int[][] solution=new int[4][4];
+        private int clueCol=1;
+        private float density;
         private boolean tutorial=false, won=false;
         private int screen=0, level, score, hearts=3, hints=3, mode=1;
         private String message="", messageKind="";
@@ -38,11 +40,12 @@ public class MainActivity extends Activity {
         private ArrayDeque<int[]> history=new ArrayDeque<>();
         private long messageUntil=0;
         GameView(Context c){ super(c); setLayerType(View.LAYER_TYPE_SOFTWARE,null); prefs=c.getSharedPreferences("nyangdoku",0); adult=BitmapFactory.decodeResource(getResources(),R.drawable.cat_adult); kitten=BitmapFactory.decodeResource(getResources(),R.drawable.cat_kitten); level=prefs.getInt("level",1); score=prefs.getInt("score",0); hints=prefs.getInt("hints",3); if(prefs.getBoolean("playing",false)){screen=1; restore();} setFocusable(true); }
-        private void restore(){ for(int r=0;r<4;r++)for(int c=0;c<4;c++) cells[r][c]=prefs.getInt("c"+r+c,0); cells[0][1]=1; }
+        private void restore(){ buildPuzzle(); for(int r=0;r<4;r++)for(int c=0;c<4;c++) cells[r][c]=prefs.getInt("c"+r+c,0); cells[0][clueCol]=1; }
         private void save(){ prefs.edit().putInt("level",level).putInt("score",score).putInt("hints",hints).putBoolean("playing",screen==1).apply(); for(int r=0;r<4;r++)for(int c=0;c<4;c++)prefs.edit().putInt("c"+r+c,cells[r][c]).apply(); }
-        private void resetBoard(){ cells=new int[4][4]; cells[0][1]=1; hearts=3; history.clear(); won=false; save(); }
+        private void resetBoard(){ buildPuzzle(); cells=new int[4][4]; cells[0][clueCol]=1; hearts=3; history.clear(); won=false; save(); }
+        private void buildPuzzle(){ int[] columns=(level%2==1)?new int[]{1,3,0,2}:new int[]{2,0,3,1}; clueCol=columns[0]; solution=new int[4][4]; for(int r=0;r<4;r++)solution[r][columns[r]]=1; }
         boolean goHome(){ if(screen==1){screen=0;save();invalidate();return true;} return false; }
-        @Override protected void onDraw(Canvas c){ super.onDraw(c); c.drawColor(bg); float w=getWidth(),h=getHeight(); if(screen==0)drawHome(c,w,h); else if(screen==2)drawTutorial(c,w,h); else drawGame(c,w,h); if(messageUntil>System.currentTimeMillis()&&!message.isEmpty())drawToast(c,w,h); }
+        @Override protected void onDraw(Canvas c){ super.onDraw(c); c.drawColor(bg); density=getResources().getDisplayMetrics().density; c.save(); c.scale(density,density); float w=getWidth()/density,h=getHeight()/density; if(screen==0)drawHome(c,w,h); else if(screen==2)drawTutorial(c,w,h); else drawGame(c,w,h); if(messageUntil>System.currentTimeMillis()&&!message.isEmpty())drawToast(c,w,h); c.restore(); }
         private void text(Canvas c,String s,float x,float y,float size,int color,boolean bold,Paint.Align align){ p.setColor(color);p.setTextSize(size);p.setTypeface(bold?Typeface.create("sans-serif-rounded",Typeface.BOLD):Typeface.create("sans-serif-rounded",Typeface.NORMAL));p.setTextAlign(align);p.setStyle(Paint.Style.FILL); c.drawText(s,x,y,p); }
         private void round(Canvas c,float l,float t,float r,float b,float rad,int color){p.setStyle(Paint.Style.FILL);p.setColor(color);c.drawRoundRect(l,t,r,b,rad,rad,p);}
         private void shadowCard(Canvas c,float l,float t,float r,float b,float rad){p.setColor(white);p.setShadowLayer(15,0,6,0x18000000);c.drawRoundRect(l,t,r,b,rad,rad,p);p.clearShadowLayer();}
@@ -67,7 +70,7 @@ public class MainActivity extends Activity {
             float gearX=w-margin-22;circle(c,gearX,backY,22,white);text(c,"⚙",gearX,backY+6,21,ink,true,Paint.Align.CENTER);
             text(c,"실수 기회",margin+8,114,13,muted,true,Paint.Align.LEFT);for(int i=0;i<3;i++)text(c,i<hearts?"♥":"♡",margin+22+i*25,148,23,i<hearts?coral:line,true,Paint.Align.CENTER);
             text(c,"색 구역마다 1마리 · 행/열마다 1마리 · 대각선으로 붙지 않기",w/2,188,13,ink,true,Paint.Align.CENTER);
-            boardSize=Math.min(w-margin*2, h*.45f); boardX=(w-boardSize)/2;boardY=Math.max(215,h*.25f);cell=boardSize/4f;
+            boardSize=Math.min(w-margin*2, h*.38f); boardX=(w-boardSize)/2;boardY=Math.max(215,h*.25f);cell=boardSize/4f;
             round(c,boardX-9,boardY-9,boardX+boardSize+9,boardY+boardSize+9,23,white);
             for(int r=0;r<4;r++)for(int col=0;col<4;col++){
                 float x=boardX+col*cell,y=boardY+r*cell,g=5; round(c,x+g/2,y+g/2,x+cell-g/2,y+cell-g/2,13,regionColors[regions[r][col]]);
@@ -90,15 +93,15 @@ public class MainActivity extends Activity {
         private void drawWin(Canvas c,float w,float h){p.setColor(0x99000000);c.drawRect(0,0,w,h,p);shadowCard(c,w*.09f,h*.32f,w*.91f,h*.64f,28);text(c,"냥냥! 퍼즐 완성",w/2,h*.40f,27,ink,true,Paint.Align.CENTER);text(c,"고양이들이 안전한 자리를 찾았어",w/2,h*.45f,15,muted,false,Paint.Align.CENTER);button(c,w*.18f,h*.51f,w*.82f,h*.59f,orange,white,"다음 레벨");}
         private void say(String s,boolean bad){message=s;messageKind=bad?"bad":"ok";messageUntil=System.currentTimeMillis()+1600;invalidate();}
         private void markBad(){hearts--;say("앗, 규칙에 어긋났어!",true);if(hearts<=0){resetBoard();say("실수 기회를 다 썼어. 다시 해보자!",true);}}
-        private void putCat(int r,int col){ if((r==0&&col==1)||cells[r][col]==1)return; if(!canPlace(r,col)){markBad();return;} if(solution[r][col]!=1){markBad();return;} history.push(new int[]{r,col,cells[r][col]});cells[r][col]=1;checkWin();save();invalidate(); }
+        private void putCat(int r,int col){ if((r==0&&col==clueCol)||cells[r][col]==1)return; if(!canPlace(r,col)){markBad();return;} if(solution[r][col]!=1){markBad();return;} history.push(new int[]{r,col,cells[r][col]});cells[r][col]=1;checkWin();save();invalidate(); }
         private void checkWin(){int count=0;for(int r=0;r<4;r++)for(int col=0;col<4;col++)if(cells[r][col]==1)count++;if(count==4){won=true;score+=100;save();invalidate();}}
-        @Override public boolean onTouchEvent(android.view.MotionEvent e){if(e.getAction()!=MotionEvent.ACTION_UP)return true;float x=e.getX(),y=e.getY(),w=getWidth(),h=getHeight();
+        @Override public boolean onTouchEvent(android.view.MotionEvent e){if(e.getAction()!=MotionEvent.ACTION_UP)return true;density=getResources().getDisplayMetrics().density;float x=e.getX()/density,y=e.getY()/density,w=getWidth()/density,h=getHeight()/density;
             if(screen==0){if(y>startButtonTop-20){if(!prefs.getBoolean("tutorialSeen",false)){screen=2;}else{screen=1;resetBoard();}invalidate();return true;}return true;}
             if(screen==2){prefs.edit().putBoolean("tutorialSeen",true).apply();screen=1;resetBoard();invalidate();return true;}
             if(won){if(y>h*.49f&&y<h*.63f){level++;prefs.edit().putInt("level",level).apply();won=false;resetBoard();}invalidate();return true;}
             if(y<85&&x<getWidth()*.22f){screen=0;save();invalidate();return true;}
             if(y>=boardY&&y<boardY+boardSize&&x>=boardX&&x<boardX+boardSize){int r=(int)((y-boardY)/cell),col=(int)((x-boardX)/cell);if(mode==1)putCat(r,col);else{if(cells[r][col]==0){history.push(new int[]{r,col,0});cells[r][col]=2;}else if(cells[r][col]==2)cells[r][col]=0;save();invalidate();}return true;}
-            float cy=boardY+boardSize+36; if(y>=cy&&y<=cy+57){mode=1;invalidate();return true;}if(y>=cy+70&&y<=cy+124){if(x>getWidth()*.53f){if(!history.isEmpty()){int[] a=history.pop();if(!(a[0]==0&&a[1]==1))cells[a[0]][a[1]]=a[2];save();invalidate();}}else{mode=2;invalidate();}return true;}if(y>=cy+138&&y<=cy+194){if(hints<=0){say("힌트를 모두 썼어",true);return true;}hints--;for(int r=0;r<4;r++)for(int col=0;col<4;col++)if(solution[r][col]==1&&cells[r][col]==0){history.push(new int[]{r,col,0});cells[r][col]=1;checkWin();save();invalidate();say("여기가 정답 칸이야!",false);return true;}return true;}
+            float cy=boardY+boardSize+36; if(y>=cy&&y<=cy+57){mode=1;invalidate();return true;}if(y>=cy+70&&y<=cy+124){if(x>getWidth()*.53f){if(!history.isEmpty()){int[] a=history.pop();if(!(a[0]==0&&a[1]==clueCol))cells[a[0]][a[1]]=a[2];save();invalidate();}}else{mode=2;invalidate();}return true;}if(y>=cy+138&&y<=cy+194){if(hints<=0){say("힌트를 모두 썼어",true);return true;}hints--;for(int r=0;r<4;r++)for(int col=0;col<4;col++)if(solution[r][col]==1&&cells[r][col]==0){history.push(new int[]{r,col,0});cells[r][col]=1;checkWin();save();invalidate();say("여기가 정답 칸이야!",false);return true;}return true;}
             return true;
         }
     }
